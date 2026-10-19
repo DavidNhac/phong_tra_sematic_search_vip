@@ -1,0 +1,50 @@
+global:
+  timeout: 30
+  concurrency: 3
+  retry_attempts: 2
+  delay_between_requests: 2.0
+  # User-Agent giống Chrome thật trên Windows để tránh bị chặn (403)
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  output_dir: "data/raw"
+
+sources:
+  - name: "luhanhvietnam"
+    url: "https://luhanhvietnam.com.vn/du-lich/phong-tra-o-ha-noi.html"
+    parser: "generic"
+
+  - name: "mytour_1"
+    url: "https://mytour.vn/vi/blog/bai-viet/10-dia-diem-phong-tra-am-nhac-tuyet-voi-o-ha-noi-de-ban-thu-gian-digifood.html"
+    parser: "mytour"
+
+  - name: "mytour_2"
+    url: "https://mytour.vn/vi/blog/bai-viet/thu-gian-voi-am-nhac-tai-13-dia-chi-phong-tra-ha-noi-doc-dao-va-noi-tieng-nhat.html"
+    parser: "mytour"
+
+  - name: "vinwonders"
+    url: "https://vinwonders.com/vi/wonderpedia/news/phong-tra-ha-noi/"
+    parser: "generic"
+
+  - name: "vinpearl"
+    url: "https://vinpearl.com/en/live-music-in-hanoi"
+    parser: "generic"
+
+  - name: "digiticket"
+    url: "https://digiticket.vn/blog/phong-tra-ha-noi"
+    parser: "digiticket"
+
+  - name: "hanoireview"
+    url: "https://hanoireview.vn/topAZ/phong-tra-tai-ha-noi-noi-tieng"
+    parser: "generic"
+
+  - name: "wecheckin"
+    url: "https://wecheckin.vn/du-lich-trong-nuoc/ha-noi/phong-tra-o-ha-noi.html"
+    parser: "generic"
+
+  # Tạm comment nguồn này vì link đã bị 404 (chết)
+  # - name: "vietnamairlines"
+  #   url: "https://vietnamairlines.com/ch/vi/plan-book/travel/travel-guide/phong-tra-ha-noi"
+  #   parser: "generic"
+
+  - name: "tatinta"
+    url: "https://tatinta.com/en/diem-den/nhung-quan-cafe-acoustic-noi-tieng-nhat-tai-ha-noi/4256"
+    parser: "generic"
