@@ -49,3 +49,27 @@ Mỗi quán trong file `tagged_entities.json` là một JSON object có các tr�
 | `source_count`    | `int`           | Số lượng nguồn riêng biệt có đề cập đến quán                                                                                   |
 | `music_genres`    | `list[string]`  | Thể loại nhạc (ví dụ: `nhac_trinh`, `acoustic`, `jazz`, `bolero`, `lofi_chill`, `indie`, `traditional`, `piano`, `pop_ballad`) |
 | `atmosphere_tags` | `list[string]`  | Nhãn không gian/bầu không khí (ví dụ: `yen_tinh`, `lang_man`, `co_kinh`, `view_dep`, `san_vuon`, `rooftop`, `sang              |
+
+cấu trúc trong sql sever.
+Vì sao tách bảng: một quán có nhiều tên gọi, ảnh, nguồn, tag và mô tả (quan hệ 1-nhiều). Nhét tất cả vào một cột thì không lọc được. Ví dụ muốn tìm quán có tag nhac_trinh thì chỉ cần WHERE tag_value = 'nhac_trinh' trên bảng tag. Đây cũng là phương án “bảng con” đã đề xuất ở handoff.
+
+Cấu trúc:
+
+tea_rooms (1 dòng/quán) ──┬── tea_room_aliases tên gọi khác
+id (PK, số) ├── tea_room_descriptions mô tả theo từng nguồn
+slug (unique, = id JSON) ├── tea_room_images ảnh (order_index 0 = ảnh chính)
+name, address, district ├── tea_room_sources nguồn: tên, URL, raw_name, crawled_at
+price, price_min/max └── tea_room_tags tag_type + tag_value
+hours, description
+image_url, source_count
+address_alternatives, llm_filled (JSON)
+created_at, updated_at
+
+Mỗi bảng con có tea_room_id trỏ về tea_rooms.id. Xóa quán thì dòng con xóa theo (ON DELETE CASCADE). tea_room_tags.tag_type nhận 3 giá trị: music_genres, atmosphere_tags, features.
+
+Nhận xét từ ảnh tea_room_aliases:
+
+Bảng có 15 alias. Có vài alias là mảnh tiêu đề blog, không phải tên quán thật: “Thưởng trà và âm nhạc ở phòng trà Hà Nội Phố”, “Phòng trà Hà Nội nổi tiếng Ấy Lounge”, “Phòng trà ‘Hà Nội Phố’”. Đã ghi ở handoff là vô hại, nhưng nếu sau này dùng alias để tìm theo tên thì nên lọc.
+Có alias trùng nghĩa chỉ khác dấu: “Acoustic Cafe” và “Acoustic café”.
+
+Dữ liệu đã nằm trong SQL Server. Chạy lại lệnh lần hai phải ra created=0 updated=25 (bạn có thể kiểm tra). Bước tiếp theo: dựng văn bản embedding từ tea_rooms

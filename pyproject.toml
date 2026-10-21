@@ -27,6 +27,7 @@ dependencies = [
     "sqlalchemy>=2.1.5",
     "pymssql>=2.4.5",
     "google-genai>=2.31.0",
+    "pyodbc>=5.3.0",
 ]
 
 [project.optional-dependencies]
@@ -59,3 +60,8 @@ ignore = ["E501"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
