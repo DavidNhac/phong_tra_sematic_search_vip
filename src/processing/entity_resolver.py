@@ -8,6 +8,7 @@ import glob
 import json
 import os
 import re
+import unicodedata
 from collections import Counter
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -40,6 +41,12 @@ def name_key(name: str) -> str:
     key = re.sub(r"^(?:phong tra|quan|cafe|lounge|bar)\s+", "", re.sub(r"\s+", " ", key).strip())
     return key.strip()
 
+_GENERIC_WORDS = re.compile(r"\b(?:phong tra|quan|cafe|ha noi|hanoi)\b")
+
+
+def core_key(key: str) -> str:
+    """Name key without generic words; used only when the addresses already match."""
+    return re.sub(r"\s+", " ", _GENERIC_WORDS.sub(" ", key)).strip()
 
 def _addr_parts(address: str) -> Tuple[str, Set[str]]:
     a = fx.strip_accents(address).lower()
@@ -144,8 +151,8 @@ class EntityResolver:
 
     @staticmethod
     def normalize_item(raw: Dict[str, Any], meta: Dict[str, Any]) -> Dict[str, Any]:
-        raw_name = raw.get("raw_name") or raw.get("name", "")
-        raw_text = raw.get("raw_text") or raw.get("description", "") or ""
+        raw_name = unicodedata.normalize("NFC", raw.get("raw_name") or raw.get("name", ""))
+        raw_text = unicodedata.normalize("NFC", raw.get("raw_text") or raw.get("description", "") or "")
         description = fx.build_description(raw_text)
         images = raw.get("image_urls") or ([raw["image_url"]] if raw.get("image_url") else [])
         language = raw.get("language") or meta["language"] or "auto"
@@ -180,9 +187,10 @@ class EntityResolver:
         if relation == "match":
             # same address: tolerate extra words ("Trinh Ca" vs "Trinh Ca Tea Room")
             score = max(sort_score, fuzz.token_set_ratio(a["_key"], b["_key"]))
+            if len(a["_core"]) >= 3 and len(b["_core"]) >= 3:  # "g4u" vs "g4u ca nhac"
+                score = max(score, fuzz.token_set_ratio(a["_core"], b["_core"]))
             return score if score >= self.address_name_threshold else None
-        return sort_score if sort_score >= self.name_threshold else None
-
+        
     def _compatible(self, group_a: List[int], group_b: List[int]) -> bool:
         """Two groups may merge only if no member of one conflicts with a member of the other.
         This stops an item without an address from chaining two different branches together."""
@@ -195,8 +203,10 @@ class EntityResolver:
     def resolve(self) -> List[Dict[str, Any]]:
         logger.info("Resolving", items=len(self.items), name_threshold=self.name_threshold)
         self.resolved_entities = []
+        
         for item in self.items:
             item["_key"] = name_key(item["name"])
+            item["_core"] = core_key(item["_key"])
 
         pairs: List[Tuple[float, int, int]] = []
         for i in range(len(self.items)):
@@ -240,10 +250,30 @@ class EntityResolver:
         ordered = sorted(enumerate(cluster), key=lambda p: (-p[1]["priority"], p[0]))
         items = [it for _, it in ordered]
 
-        counts = Counter(it["name"] for it in items)
-        # most common; tie -> the spelling with Vietnamese diacritics; then the shortest
-        name = min(counts, key=lambda n: (-counts[n], fx.strip_accents(n) == n, len(n), n))
-        aliases = sorted({it["name"] for it in items} - {name})
+        # Count occurrences of each name.
+        counts = Counter(it["name"] for it in items if it["name"])
+
+        # Choose canonical name:
+        # most common -> Vietnamese diacritics -> shortest -> alphabetical.
+        name = min(
+            counts,
+            key=lambda n: (
+                -counts[n],
+                fx.strip_accents(n) == n,
+                len(n),
+                n,
+            ),
+        )
+
+        # Collect aliases, ignoring case differences and the canonical name.
+        seen = {name.casefold()}
+        aliases: List[str] = []
+
+        for a in sorted(counts):
+            if a.casefold() not in seen:
+                seen.add(a.casefold())
+                aliases.append(a)
+
 
         def first_valid(field: str, valid) -> str:
             for it in items:
@@ -252,8 +282,18 @@ class EntityResolver:
             return ""
 
         address = first_valid("address", fx.is_valid_address)
-        price = first_valid("price", lambda v: True)
-        hours = first_valid("hours", lambda v: True)
+        def vote(field: str) -> str:
+            """Most common value across sources; ties go to the higher-priority source."""
+            values = [it[field] for it in items if it[field]]
+            if not values:
+                return ""
+            counts = Counter(values)
+            best = max(counts.values())
+            return next(v for v in values if counts[v] == best)
+
+        price = vote("price")
+        hours = vote("hours")
+        
         # Only genuinely different addresses; spelling variants of the chosen one are not alternatives.
         address_alternatives = sorted(
             {it["address"] for it in items

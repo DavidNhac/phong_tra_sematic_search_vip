@@ -3,10 +3,13 @@
 Uses the shared llm_client (google-genai, global rate limiter, 429 retry). Tags are generated
 from ALL source descriptions of an entity, not just one.
 """
+
+
 import argparse
 import hashlib
 import json
 import random
+import unicodedata
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -103,41 +106,62 @@ def clean_tags(raw: Dict[str, Any]) -> Dict[str, List[str]]:
         "features": keep(raw.get("features"), FEATURES),
     }
 
-
+def _fold(text: str) -> str:
+    """Lowercase + strip accents (đ -> d)."""
+    s = unicodedata.normalize("NFC", text).lower().replace("đ", "d")
+    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
 # A tag is kept only if the description contains evidence for it (accent-insensitive).
 # Small LLMs tend to add plausible-sounding tags (parking, snacks) that no source mentions.
+# for tags whose stripped form is ambiguous ("trinh" also matches "chương trình", "trình diễn").
 EVIDENCE = {
     "music_genres": {
-        "nhac_trinh": r"trinh",
-        "acoustic": r"acoustic|guitar",
+        "acoustic": r"nhac acoustic|acoustic live|acoustic (band|show|cover|music|session)|"
+                    r"dem acoustic|(bieu dien|trinh dien|choi|hat) acoustic|"
+                    r"acoustic (cafe|coffee)|guitar",
         "jazz": r"jazz",
         "bolero": r"bolero|nhac vang|tien chien",
-        "lofi_chill": r"lofi|lo-fi|chill",
+        "lofi_chill": r"lofi|lo-fi|nhac chill|chill ?out",
         "indie": r"indie|underground",
         "traditional": r"dan gian|co truyen|dan toc|truyen thong|dan ca|ca tru|cheo|quan ho",
         "piano": r"piano",
-        "pop_ballad": r"\bpop\b|ballad|nhac tre|nhac tinh cam",
+        "pop_ballad": r"\bpop\b|ballad|\bnhac tre\b|nhac tinh cam",
     },
     "features": {
-        "co_live_music": r"nhac song|\blive\b|bieu dien|trinh dien|ca si|ban nhac|\bband\b|san khau|dem nhac|hat truc tiep|nghe si",
+        "co_live_music": r"nhac song|\blive\b|bieu dien|trinh dien(?! ra)|ca si|ban nhac|\bband\b|"
+                         r"san khau|dem nhac|hat truc tiep|nghe si",
         "cho_dat_cho": r"dat cho|dat ban|reservation|\bbook",
-        "do_an_nhe": r"do an|\bbanh|snack|an nhe|mon an|thuc don do an|trai cay|hat huong duong|\bfood",
         "parking": r"gui xe|do xe|bai xe|bai do|parking|cho de xe|ham de xe",
         "khong_thuoc_la": r"khong hut thuoc|cam hut thuoc|khong khoi thuoc|non-smoking|no smoking",
         "wifi_manh": r"wi-?fi",
     },
 }
+EVIDENCE_ACCENTED = {
+    "music_genres": {
+        "nhac_trinh": r"nhạc\s+trịnh|trịnh\s+công\s+sơn|ca\s+khúc\s+trịnh|nhạc\s+sĩ\s+trịnh",
+    },
+    "features": {
+        "do_an_nhe": r"đồ\s+ăn|món\s+ăn|ăn\s+nhẹ|ăn\s+vặt|\bbánh|snack|trái\s+cây|"
+                     r"hạt\s+hướng\s+dương|\bfood",
+    },
+}
+
 
 
 def validate_tags(tags: Dict[str, List[str]], text: str) -> Tuple[Dict[str, List[str]], List[str]]:
     """Drop music_genres/features without evidence in `text`. Returns (tags, dropped)."""
-    haystack = fx.strip_accents(text).lower()
+    folded = _fold(text)
+    accented = unicodedata.normalize("NFC", text).lower()
     out = {k: list(v) for k, v in tags.items()}
     dropped: List[str] = []
-    for group, rules in EVIDENCE.items():
+    for group in ("music_genres", "features"):
+        plain, acc = EVIDENCE.get(group, {}), EVIDENCE_ACCENTED.get(group, {})
         kept = []
         for tag in out.get(group, []):
-            if re.search(rules[tag], haystack):
+            if tag in acc:
+                ok = re.search(acc[tag], accented)
+            else:
+                ok = tag in plain and re.search(plain[tag], folded)
+            if ok:
                 kept.append(tag)
             else:
                 dropped.append(f"{group}:{tag}")

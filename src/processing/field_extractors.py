@@ -191,6 +191,8 @@ def parse_price(text: str) -> Optional[Tuple[int, int]]:
     """(min, max) in VND. Labelled lines win; otherwise the first amount with a currency unit."""
     if not text:
         return None
+    
+    text = re.sub(r"(?<=\d)\s+(?=[.,]\d{3}(?!\d))", "", text)  # "45 .000" -> "45.000"
     for m in _PRICE_LABEL.finditer(text):
         value = _FIELD_STOP.split(m.group("v"), maxsplit=1)[0]
         got = _parse_price_value(value)
@@ -240,6 +242,9 @@ def _hhmm(h: str, m: Optional[str], ampm: Optional[str]) -> Optional[str]:
     hour %= 24
     return f"{hour:02d}:{minute:02d}"
 
+def _span_minutes(a: str, b: str) -> int:
+    (ha, ma), (hb, mb) = (map(int, a.split(":")), map(int, b.split(":")))
+    return ((hb * 60 + mb) - (ha * 60 + ma)) % (24 * 60)
 
 def _parse_hours_value(value: str) -> str:
     if _HOURS_24.search(value):
@@ -248,7 +253,7 @@ def _parse_hours_value(value: str) -> str:
     for m in _HOURS_RANGE.finditer(value):
         a = _hhmm(m.group("h1"), m.group("m1"), m.group("p1"))
         b = _hhmm(m.group("h2"), m.group("m2"), m.group("p2"))
-        if a and b:
+        if a and b and _span_minutes(a, b) >= 60:  # a span under 1h is a typo, not opening hours
             r = f"{a} - {b}"
             if r not in ranges:
                 ranges.append(r)
