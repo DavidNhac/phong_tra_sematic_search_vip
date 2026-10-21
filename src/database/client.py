@@ -1,29 +1,32 @@
 """Qdrant client configuration and connection."""
+from pydantic_settings import BaseSettings, SettingsConfigDict
 from qdrant_client import QdrantClient
-from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """Application settings from environment variables."""
-    
+
+    # extra="ignore": .env còn chứa biến của phần khác (SQL_SERVER_URL, GEMINI_API_KEY...)
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
     # Qdrant
     qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str = ""
     qdrant_collection: str = "phong_tra_ha_noi"
-    
+    qdrant_upsert_batch: int = 100
+
     # Embedding
     embedding_model: str = "BAAI/bge-m3"
     embedding_device: str = "cpu"
-    
+    embedding_batch_size: int = 32
+
     # API
     api_host: str = "0.0.0.0"
     api_port: int = 8000
     api_env: str = "development"
     log_level: str = "INFO"
-    
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
 
 
 # Global settings instance

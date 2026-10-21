@@ -73,3 +73,31 @@ Bảng có 15 alias. Có vài alias là mảnh tiêu đề blog, không phải t
 Có alias trùng nghĩa chỉ khác dấu: “Acoustic Cafe” và “Acoustic café”.
 
 Dữ liệu đã nằm trong SQL Server. Chạy lại lệnh lần hai phải ra created=0 updated=25 (bạn có thể kiểm tra). Bước tiếp theo: dựng văn bản embedding từ tea_rooms
+
+###embeding.
+65 là số mô tả, không phải số quán. Quán trùng đã gộp từ trước (bước entity_resolver: 65 mục crawl thành 25 quán). Mỗi quán còn giữ mô tả của từng nguồn đã đóng góp, nên 25 quán có tổng 65 mô tả (khoảng 2-5 mô tả/quán), mỗi mô tả thành một điểm trong Qdrant. Dòng log 65 điểm từ 25 quán đúng nghĩa đó.
+
+Bước embed đã làm:
+
+Đọc 25 quán, tag, nguồn và 65 mô tả từ SQL Server.
+Với mỗi mô tả, dựng văn bản tên + khu vực + tag + mô tả.
+Đếm token (lớn nhất 732, giới hạn 8192, nên không cần chia chunk).
+Encode 65 văn bản bằng bge-m3 thành vector 1024 chiều (3 lô).
+Xóa và tạo lại collection, tạo index, ghi 65 điểm. Payload mỗi điểm gồm tea_room_id, name, district, tag, giá và nguồn.
+
+Về chuyện trùng: các điểm cùng quán là cố ý (mỗi nguồn viết khác nhau, giúp tìm theo nhiều cách diễn đạt). Chúng không gây trùng trong kết quả, vì bước tìm kiếm sẽ gộp theo tea_room_id, mỗi quán chỉ hiện một lần với đoạn khớp nhất. Resolver chỉ bỏ mô tả giống nhau từ 92% trở lên, nên trường hợp hai nguồn chép gần như y hệt đã được lọc từ trước.
+
+###
+
+Sửa lại một chút: Qdrant có 1 collection với 65 điểm (không phải 65 collection), và 65 điểm đó thuộc 25 quán.
+
+Khi tìm kiếm có gộp không? Có. Mình sẽ truy vấn theo tea_room_id và lấy 1 điểm tốt nhất mỗi quán, nên kết quả luôn là danh sách quán không trùng, xếp theo điểm của đoạn khớp nhất.
+
+Trang web hiển thị cái gì? Có hai loại thông tin, lấy từ hai chỗ:
+
+Thông tin quán (tên, địa chỉ, quận, giá, giờ, ảnh, tag): giống nhau ở mọi điểm của cùng quán, nên không phụ thuộc điểm nào được chọn.
+Đoạn trích mô tả: lấy từ điểm khớp nhất, nên thay đổi theo câu hỏi. Ví dụ tìm “không gian yên tĩnh” có thể ra đoạn của digiticket, còn tìm “đêm nhạc” có thể ra đoạn của hanoireview. Kèm theo source_name và source_url để dẫn nguồn.
+
+Nếu muốn đoạn hiển thị cố định cho mỗi quán thì dùng tea_rooms.description trong SQL, tách khỏi kết quả tìm kiếm (Qdrant chỉ dùng để xếp hạng).
+
+Một lưu ý theo handoff: đoạn mô tả là nội dung blog có bản quyền. Nếu công khai web thì nên chỉ hiện đoạn trích ngắn kèm link nguồn, hoặc viết lại.

@@ -1,83 +1,68 @@
-"""Qdrant collection management and indexing."""
-from qdrant_client import QdrantClient
-from qdrant_client.models import (
-    Distance,
-    VectorParams,
-    SparseVectorParams,
-    SparseIndexParams,
-    PayloadSchemaType,
-)
+"""Quản lý collection Qdrant: mỗi mô tả của một quán = một điểm, 1 vector dense."""
+import argparse
+
 import structlog
+from qdrant_client import QdrantClient
+from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
 
 from src.database.client import get_qdrant_client, settings
 
 logger = structlog.get_logger()
 
+EMBEDDING_DIM = 1024  # BAAI/bge-m3
 
-def create_collection(client: QdrantClient) -> None:
-    """Create Qdrant collection with multi-aspect vectors."""
+KEYWORD_FIELDS = ["slug", "district", "music_genres", "atmosphere_tags", "features", "source_name"]
+INTEGER_FIELDS = ["tea_room_id", "price_min_vnd", "price_max_vnd"]
+
+
+def create_collection(client: QdrantClient, recreate: bool = False) -> None:
+    """Tạo collection. recreate=True thì xóa collection cũ rồi tạo lại."""
     collection_name = settings.qdrant_collection
-    
-    # Check if collection exists
+
     collections = [c.name for c in client.get_collections().collections]
     if collection_name in collections:
-        logger.warning(f"Collection '{collection_name}' already exists")
-        return
-    
+        if not recreate:
+            logger.warning(f"Collection '{collection_name}' already exists")
+            return
+        logger.warning(f"Deleting collection '{collection_name}' to recreate")
+        client.delete_collection(collection_name)
+
     logger.info(f"Creating collection '{collection_name}'")
-    
     client.create_collection(
         collection_name=collection_name,
-        vectors_config={
-            "overview": VectorParams(size=1024, distance=Distance.COSINE),
-            "atmosphere": VectorParams(size=1024, distance=Distance.COSINE),
-            "experience": VectorParams(size=1024, distance=Distance.COSINE),
-        },
-        sparse_vectors_config={
-            "bm25": SparseVectorParams(
-                index=SparseIndexParams(on_disk=False)
-            )
-        }
+        vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
     )
-    
     logger.info(f"✅ Collection '{collection_name}' created")
 
 
 def create_payload_indexes(client: QdrantClient) -> None:
-    """Create payload indexes for fast filtering."""
+    """Tạo payload index để lọc nhanh."""
     collection_name = settings.qdrant_collection
-    
     logger.info("Creating payload indexes")
-    
-    # Keyword indexes
-    keyword_fields = ["district", "music_genres", "atmosphere_tags", "features"]
-    for field in keyword_fields:
+
+    for field in KEYWORD_FIELDS:
         client.create_payload_index(
             collection_name=collection_name,
             field_name=field,
-            field_schema=PayloadSchemaType.KEYWORD
+            field_schema=PayloadSchemaType.KEYWORD,
         )
-        logger.debug(f"Created keyword index for '{field}'")
-    
-    # Numeric indexes
-    numeric_fields = ["price_min_vnd", "price_max_vnd", "rating"]
-    for field in numeric_fields:
+    for field in INTEGER_FIELDS:
         client.create_payload_index(
             collection_name=collection_name,
             field_name=field,
-            field_schema=PayloadSchemaType.FLOAT if field == "rating" else PayloadSchemaType.INTEGER
+            field_schema=PayloadSchemaType.INTEGER,
         )
-        logger.debug(f"Created numeric index for '{field}'")
-    
     logger.info("✅ Payload indexes created")
 
 
-def setup_collection() -> None:
+def setup_collection(recreate: bool = False) -> None:
     """Setup collection with indexes."""
     client = get_qdrant_client()
-    create_collection(client)
+    create_collection(client, recreate=recreate)
     create_payload_indexes(client)
 
 
 if __name__ == "__main__":
-    setup_collection()
+    parser = argparse.ArgumentParser(description="Tạo collection Qdrant rỗng + index.")
+    parser.add_argument("--recreate", action="store_true", help="Xóa collection cũ rồi tạo lại")
+    setup_collection(recreate=parser.parse_args().recreate)
