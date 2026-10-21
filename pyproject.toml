@@ -23,6 +23,10 @@ dependencies = [
     "html2text>=2025.4.15",
     "pyyaml>=6.0.3",
     "rapidfuzz>=3.14.6",
+    "google-generativeai>=0.8.6",
+    "sqlalchemy>=2.1.5",
+    "pymssql>=2.4.5",
+    "google-genai>=2.31.0",
 ]
 
 [project.optional-dependencies]

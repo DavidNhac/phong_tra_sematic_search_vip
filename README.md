@@ -14,6 +14,7 @@ Hệ thống tìm kiếm ngữ nghĩa cho các phòng trà tại Hà Nội, sử
 ## 🚀 Quick Start
 
 ### Yêu cầu
+
 - Python 3.11+
 - Docker & Docker Compose
 - [uv](https://docs.astral.sh/uv/) (package manager)
@@ -22,7 +23,7 @@ Hệ thống tìm kiếm ngữ nghĩa cho các phòng trà tại Hà Nội, sử
 
 ```bash
 # Clone repo
-git clone https://github.com/yourname/phong-tra-semantic-search.git
+git clone https://github.com/davidnhac/phong-tra-semantic-search.git
 cd phong-tra-semantic-search
 
 # Copy env
@@ -42,3 +43,4 @@ make index
 
 # Chạy API
 make serve
+```
