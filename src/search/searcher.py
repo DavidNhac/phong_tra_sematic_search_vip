@@ -20,7 +20,7 @@ from src.database.schema import PhongTraPayload, SearchResult
 from src.embeddings.embedder import TAG_LABELS, Embedder
 
 logger = structlog.get_logger()
-
+DEFAULT_MIN_SCORE = 0.45  # dưới mức này là gần như không liên quan (câu lạc đề cho ~0.35-0.37)
 
 def _tag_field(tag: str) -> str:
     """Tag thuộc nhóm nào (music_genres / atmosphere_tags / features)."""
@@ -64,17 +64,15 @@ class Searcher:
         district: str | None = None,
         max_price: int | None = None,
         tags: list[str] | None = None,
-        min_score: float | None = None,
+        min_score: float | None = DEFAULT_MIN_SCORE,
     ) -> list[SearchResult]:
         """Trả về tối đa `limit` quán, mỗi quán một lần, kèm đoạn mô tả khớp nhất."""
         query = query.strip()
         if not query:
             raise ValueError("Câu hỏi rỗng")
 
-        vector = self.embedder.model.encode(
-            [query], normalize_embeddings=True, show_progress_bar=False
-        )[0].tolist()
-
+        vector = self.embedder.encode([query], show_progress_bar=False)[0]
+        
         response = self.client.query_points_groups(
             collection_name=settings.qdrant_collection,
             query=vector,
@@ -123,7 +121,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--district", default=None)
     parser.add_argument("--max-price", type=int, default=None, help="VNĐ; giá thấp nhất của quán <= giá trị này")
     parser.add_argument("--tag", action="append", default=[], help="Lặp lại để lọc nhiều tag (AND)")
-    parser.add_argument("--min-score", type=float, default=None)
+    parser.add_argument("--min-score", type=float, default=DEFAULT_MIN_SCORE)
     args = parser.parse_args(argv)
 
     try:

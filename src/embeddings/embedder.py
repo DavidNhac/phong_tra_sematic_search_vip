@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import statistics
 
+import unicodedata
+
 import structlog
 
 from src.database.client import settings
@@ -56,6 +58,13 @@ def build_text(
     return " ".join(parts)
 
 
+def normalize_text(text: str) -> str:
+    """Chuẩn hóa trước khi embed: gộp Unicode về NFC rồi hạ chữ thường.
+
+    Dùng chung cho văn bản dựng index và câu hỏi, để "Trịnh" và "trịnh" cho cùng vector.
+    """
+    return unicodedata.normalize("NFC", text).strip().lower()
+
 class Embedder:
     """Bọc SentenceTransformer, tải model lười (lần đầu tải bge-m3 khoảng vài GB)."""
 
@@ -63,7 +72,8 @@ class Embedder:
         self.model_name = model_name or settings.embedding_model
         self.device = device or settings.embedding_device
         self._model = None
-
+        
+        
     @property
     def model(self):
         if self._model is None:
@@ -73,20 +83,25 @@ class Embedder:
             self._model = SentenceTransformer(self.model_name, device=self.device)
         return self._model
 
-    def encode(self, texts: list[str], batch_size: int | None = None) -> list[list[float]]:
+    def encode(
+        self,
+        texts: list[str],
+        batch_size: int | None = None,
+        show_progress_bar: bool = True,
+    ) -> list[list[float]]:
         """Encode theo lô, vector đã chuẩn hóa (hợp với khoảng cách cosine)."""
         vectors = self.model.encode(
-            texts,
+            [normalize_text(t) for t in texts],
             batch_size=batch_size or settings.embedding_batch_size,
             normalize_embeddings=True,
-            show_progress_bar=True,
+            show_progress_bar=show_progress_bar,
             convert_to_numpy=True,
         )
         return vectors.tolist()
 
     def token_stats(self, texts: list[str]) -> dict[str, int | float]:
         """Số token của từng văn bản so với giới hạn của model."""
-        ids = self.model.tokenizer(texts, add_special_tokens=True)["input_ids"]
+        ids = self.model.tokenizer([normalize_text(t) for t in texts], add_special_tokens=True)["input_ids"]
         lengths = [len(x) for x in ids]
         return {
             "count": len(lengths),
