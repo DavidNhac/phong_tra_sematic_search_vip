@@ -20,11 +20,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from src.database.client import get_qdrant_client, settings
-from src.database.indexer import create_collection, create_payload_indexes
+from src.database.indexer import DENSE_VECTOR, SPARSE_VECTOR, create_collection, create_payload_indexes
 from src.database.schema import PhongTraPayload
 from src.database.sql_client import SQLClient
 from src.database.sql_models import TeaRoom
 from src.embeddings.embedder import Embedder, build_text
+from src.embeddings.sparse import encode_sparse
 
 logger = structlog.get_logger()
 
@@ -116,12 +117,17 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     vectors = embedder.encode(texts)  # embed xong mới xóa collection cũ
+    sparse_vectors = encode_sparse(texts)
     create_collection(qdrant, recreate=True)
     create_payload_indexes(qdrant)
 
     points = [
-        PointStruct(id=i["id"], vector=v, payload=i["payload"])
-        for i, v in zip(items, vectors)
+        PointStruct(
+            id=i["id"],
+            vector={DENSE_VECTOR: v, SPARSE_VECTOR: sv},
+            payload=i["payload"],
+        )
+        for i, v, sv in zip(items, vectors, sparse_vectors)
     ]
     batch = settings.qdrant_upsert_batch
     for start in range(0, len(points), batch):

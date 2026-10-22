@@ -1,7 +1,7 @@
 """Test phần dựng bộ lọc (không cần Qdrant, không tải model). python -m pytest tests/unit/test_searcher.py -v"""
 import pytest
 
-from src.search.searcher import build_filter
+from src.search.searcher import RRF_K, build_filter, rrf_fuse
 
 
 def test_khong_loc_tra_ve_none():
@@ -18,3 +18,14 @@ def test_loc_day_du():
 def test_tag_khong_hop_le():
     with pytest.raises(ValueError, match="Tag không hợp lệ"):
         build_filter(tags=["khong_co_tag_nay"])
+
+def test_rrf_quan_dung_dau_ca_hai_nhanh_thang():
+    scores = rrf_fuse([[1, 2, 3], [1, 3, 2]])
+    assert max(scores, key=scores.get) == 1
+    assert scores[1] == pytest.approx(2 / (RRF_K + 1))
+
+
+def test_rrf_quan_chi_co_o_mot_nhanh_van_duoc_tinh():
+    scores = rrf_fuse([[1, 2], [3]])
+    assert set(scores) == {1, 2, 3}
+    assert scores[3] == pytest.approx(1 / (RRF_K + 1))

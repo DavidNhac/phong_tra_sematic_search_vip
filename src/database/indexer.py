@@ -1,15 +1,24 @@
-"""Quản lý collection Qdrant: mỗi mô tả của một quán = một điểm, 1 vector dense."""
+"""Quản lý collection Qdrant: mỗi mô tả của một quán = một điểm, 2 vector có tên:
+`dense` (bge-m3, cosine) và `bm25` (sparse, Qdrant tính IDF)."""
 import argparse
 
 import structlog
 from qdrant_client import QdrantClient
-from qdrant_client.models import Distance, PayloadSchemaType, VectorParams
+from qdrant_client.models import (
+    Distance,
+    Modifier,
+    PayloadSchemaType,
+    SparseVectorParams,
+    VectorParams,
+)
 
 from src.database.client import get_qdrant_client, settings
 
 logger = structlog.get_logger()
 
 EMBEDDING_DIM = 1024  # BAAI/bge-m3
+DENSE_VECTOR = "dense"  # tên vector dense
+SPARSE_VECTOR = "bm25"  # tên vector sparse (từ khóa)
 
 KEYWORD_FIELDS = ["slug", "district", "music_genres", "atmosphere_tags", "features", "source_name"]
 INTEGER_FIELDS = ["tea_room_id", "price_min_vnd", "price_max_vnd"]
@@ -30,7 +39,8 @@ def create_collection(client: QdrantClient, recreate: bool = False) -> None:
     logger.info(f"Creating collection '{collection_name}'")
     client.create_collection(
         collection_name=collection_name,
-        vectors_config=VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE),
+        vectors_config={DENSE_VECTOR: VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE)},
+        sparse_vectors_config={SPARSE_VECTOR: SparseVectorParams(modifier=Modifier.IDF)},
     )
     logger.info(f"✅ Collection '{collection_name}' created")
 

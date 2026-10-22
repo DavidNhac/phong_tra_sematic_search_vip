@@ -1,0 +1,32 @@
+[
+    {
+        "query": "quán nhạc trịnh yên tĩnh",
+        "expected": ["Trịnh Ca", "101 Trung Kính", "Cuối Ngõ"],
+        "must_not": [],
+        "note": "3 quán có tag nhac_trinh + yen_tinh trong output. Hà Nội Phố cũng có nhac_trinh nhưng chưa rõ có nên là đáp án không."
+    },
+    {
+        "query": "quán có sân vườn view đẹp",
+        "expected": ["Trixie", "Xóm cafe"],
+        "must_not": [],
+        "note": "2 quán duy nhất có tag san_vuon trong output."
+    },
+    {
+        "query": "cafe acoustic cho giới trẻ",
+        "expected": ["Acoustic Café", "Cà Phê Không", "ABC Cafe", "Ấy Lounge"],
+        "must_not": ["Trịnh Ca"],
+        "note": "must_not: Trịnh Ca lọt top chỉ vì câu mở đầu chung 'Quán cafe Acoustic Hà Nội'. Danh sách expected là NHÁP, cần David xác nhận."
+    },
+    {
+        "query": "Hay Bar",
+        "expected": ["Hay Bar"],
+        "must_not": [],
+        "note": "Truy vấn theo tên, Hay Bar phải đứng hạng 1."
+    },
+    {
+        "query": "quán nhạc bolero",
+        "expected": ["Sweet Home Lounge"],
+        "must_not": [],
+        "note": "Theo tiêu chí kiểm thử trong handoff: Sweet Home Lounge lên đầu. NHÁP, cần xác nhận thêm quán bolero khác."
+    }
+]
