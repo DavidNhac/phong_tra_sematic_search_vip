@@ -326,13 +326,36 @@ def _strip_price_prefix(line: str):
     return rest[amount.end():].strip() if amount else ""  # unreadable price: drop the line
 
 
+_ADDR_LINE_START = re.compile(
+    r"(?i)^(?:(?:tầng|tòa|số|ngõ|ngách)\b|\d+[A-Za-z]?(?:/\d+)*\s*(?:,|ngõ|ngách|phố|đường|p\.))"
+)
+_ADDR_LINE_END = re.compile(r"(?i)(?:hà nội|hanoi)(?:\s*,?\s*việt nam)?\s*\.?$")
+
+
+def _is_address_only(line: str) -> bool:
+    """A whole line that is just a street address without a label, e.g.
+    'Số 54 – BT2, Nguyễn Khuyến, Hà Nội' (multi-branch venues list one address per line).
+
+    Deliberately strict so prose is never dropped: short, starts like an address, has a digit
+    and a comma, ends with the city, and is not a sentence (no '.', '!' or '?' inside)."""
+    return (
+        len(line) <= 120
+        and "," in line
+        and any(c.isdigit() for c in line)
+        and not re.search(r"[.!?]\s", line)
+        and bool(_ADDR_LINE_START.match(line))
+        and bool(_ADDR_LINE_END.search(line))
+    )
+
+
 def build_description(raw_text: str) -> str:
-    """Raw text minus label lines (address/price/hours), image credits and page furniture.
-    Never truncated."""
+    """Raw text minus label lines (address/price/hours), bare address lines, image credits and
+    page furniture. Never truncated otherwise. The address itself is still extracted from the
+    raw text by extract_address(), so nothing is lost from the `address` field."""
     kept: List[str] = []
     for line in (raw_text or "").split("\n"):
         line = line.strip()
-        if not line or _CREDIT_LINE.match(line):
+        if not line or _CREDIT_LINE.match(line) or _is_address_only(line):
             continue
         stripped = _strip_price_prefix(line)
         if stripped is not None:

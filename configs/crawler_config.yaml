@@ -66,8 +66,8 @@ sources:
   #   url: "https://vietnamairlines.com/ch/vi/plan-book/travel/travel-guide/phong-tra-ha-noi"
   #   parser: "generic"
 
-  - name: "tatinta"
-    url: "https://tatinta.com/en/diem-den/nhung-quan-cafe-acoustic-noi-tieng-nhat-tai-ha-noi/4256"
-    parser: "generic"
-    # không khai báo language: URL có /en/ nhưng slug tiếng Việt, để tự nhận diện
-    priority: 1
+  # - name: "tatinta"
+  #   url: "https://tatinta.com/en/diem-den/nhung-quan-cafe-acoustic-noi-tieng-nhat-tai-ha-noi/4256"
+  #   parser: "generic"
+  #   # không khai báo language: URL có /en/ nhưng slug tiếng Việt, để tự nhận diện
+  #   priority: 1

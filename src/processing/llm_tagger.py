@@ -3,13 +3,10 @@
 Uses the shared llm_client (google-genai, global rate limiter, 429 retry). Tags are generated
 from ALL source descriptions of an entity, not just one.
 """
-
-
 import argparse
 import hashlib
 import json
 import random
-import unicodedata
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -55,6 +52,10 @@ FEATURES = {
     "khong_thuoc_la": "không hút thuốc / khu vực cấm thuốc",
     "wifi_manh": "wifi mạnh, ổn định",
 }
+
+# Tags that mean the same in practice. Applied AFTER the LLM answer (the cache keeps the raw
+# answer), so merging does not need a new Gemini call.
+TAG_ALIASES = {"co_dien": "co_kinh"}
 
 
 def _taxonomy_block(title: str, tags: Dict[str, str]) -> str:
@@ -106,67 +107,130 @@ def clean_tags(raw: Dict[str, Any]) -> Dict[str, List[str]]:
         "features": keep(raw.get("features"), FEATURES),
     }
 
-def _fold(text: str) -> str:
-    """Lowercase + strip accents (đ -> d)."""
-    s = unicodedata.normalize("NFC", text).lower().replace("đ", "d")
-    return "".join(c for c in unicodedata.normalize("NFD", s) if unicodedata.category(c) != "Mn")
-# A tag is kept only if the description contains evidence for it (accent-insensitive).
-# Small LLMs tend to add plausible-sounding tags (parking, snacks) that no source mentions.
-# for tags whose stripped form is ambiguous ("trinh" also matches "chương trình", "trình diễn").
+
+# A tag is kept only if the description contains evidence for it. Patterns run on text that is
+# lower-cased and accent-stripped (so "trình" and "trịnh" both become "trinh": write patterns
+# with that in mind, and use \b where a short word could sit inside another one,
+# e.g. "xua" inside "xuat", "view" inside "review").
+# Small LLMs tend to add plausible-sounding tags that no source mentions.
 EVIDENCE = {
     "music_genres": {
-        "acoustic": r"nhac acoustic|acoustic live|acoustic (band|show|cover|music|session)|"
-                    r"dem acoustic|(bieu dien|trinh dien|choi|hat) acoustic|"
-                    r"acoustic (cafe|coffee)|guitar",
+        # "trinh" alone also matches "chuong trinh" / "trinh dien" -> need the musical context
+        "nhac_trinh": r"nhac trinh(?! dien)|trinh cong son|nhac si trinh|ca khuc (?:cua )?trinh|\btcs\b",
+        "acoustic": r"acoustic|guitar",
         "jazz": r"jazz",
         "bolero": r"bolero|nhac vang|tien chien",
-        "lofi_chill": r"lofi|lo-fi|nhac chill|chill ?out",
+        "lofi_chill": r"lofi|lo-fi|chill",
         "indie": r"indie|underground",
         "traditional": r"dan gian|co truyen|dan toc|truyen thong|dan ca|ca tru|cheo|quan ho",
         "piano": r"piano",
-        "pop_ballad": r"\bpop\b|ballad|\bnhac tre\b|nhac tinh cam",
+        "pop_ballad": r"\bpop\b|ballad|nhac tre|nhac tinh cam",
+    },
+    "atmosphere_tags": {
+        "yen_tinh": r"yen tinh|yen binh|an yen|thanh tinh|\bit on\b|nhe nhang|thu gian|thu thai"
+                    r"|quiet|peaceful|calm|tranquil",
+        "lang_man": r"lang man|hen ho|cap doi|romantic",
+        "co_kinh": r"co kinh|hoai co|hoai niem|\bxua\b|xua cu|co xua|nha co|co dien|chau au"
+                   r"|goi nho|retro|vintage|classic|nostalg",
+        "view_dep": r"\bview\b|toan canh|nhin ra|ho tay|canh quan|scenery",
+        "san_vuon": r"san vuon|khu vuon|vuon cay|khong gian xanh|cay xanh|ngoai troi|garden|outdoor|patio",
+        "rooftop": r"san thuong|tang thuong|tang mai|rooftop",
+        "sang_trong": r"sang trong|cao cap|lung linh|long lay|dang cap|sang chanh|xa hoa|luxur|elegant",
+        "binh_dan": r"binh dan|gia re|phai chang|sinh vien|affordable|cheap|budget",
+        "tre_trung": r"tre trung|gioi tre|hien dai|nang dong|sinh vien|song ao|check-?in"
+                     r"|youth|young|modern|trendy",
     },
     "features": {
-        "co_live_music": r"nhac song|\blive\b|bieu dien|trinh dien(?! ra)|ca si|ban nhac|\bband\b|"
-                         r"san khau|dem nhac|hat truc tiep|nghe si",
+        "co_live_music": r"nhac song|\blive\b|bieu dien|trinh dien|ca si|ban nhac|\bband\b|san khau|dem nhac|hat truc tiep|nghe si",
         "cho_dat_cho": r"dat cho|dat ban|reservation|\bbook",
+        # \b is needed: "an nhe" also sits inside "gian nhe" (thư giãn nhẹ nhàng) and "do an"
+        # also matches "do an toàn / an ninh" once accents are gone
+        "do_an_nhe": r"\bdo an\b(?! toan| ninh| nhien)|\bbanh|snack|\ban nhe\b|\bmon an\b"
+                     r"|thuc don do an|trai cay|hat huong duong|\bfood",
         "parking": r"gui xe|do xe|bai xe|bai do|parking|cho de xe|ham de xe",
         "khong_thuoc_la": r"khong hut thuoc|cam hut thuoc|khong khoi thuoc|non-smoking|no smoking",
         "wifi_manh": r"wi-?fi",
     },
 }
-EVIDENCE_ACCENTED = {
-    "music_genres": {
-        "nhac_trinh": r"nhạc\s+trịnh|trịnh\s+công\s+sơn|ca\s+khúc\s+trịnh|nhạc\s+sĩ\s+trịnh",
-    },
-    "features": {
-        "do_an_nhe": r"đồ\s+ăn|món\s+ăn|ăn\s+nhẹ|ăn\s+vặt|\bbánh|snack|trái\s+cây|"
-                     r"hạt\s+hướng\s+dương|\bfood",
-    },
+
+# Generic "category" wording that says nothing about what the venue plays, removed before the
+# tag's pattern runs. e.g. a listicle opening "Quán cafe Acoustic Hà Nội ..." must not give
+# every venue under it the `acoustic` tag.
+GENERIC_CATEGORY = {
+    "acoustic": r"(?:ca phe|cafe|coffee|quan|phong tra|tiem)\s+acoustic(?:\s+ha noi)?",
 }
 
+MIN_NAME_LEN = 4  # shorter names/aliases are not removed from the text (too many false hits)
 
 
-def validate_tags(tags: Dict[str, List[str]], text: str) -> Tuple[Dict[str, List[str]], List[str]]:
-    """Drop music_genres/features without evidence in `text`. Returns (tags, dropped)."""
-    folded = _fold(text)
-    accented = unicodedata.normalize("NFC", text).lower()
-    out = {k: list(v) for k, v in tags.items()}
+def _prepare(text: str, names: List[str]) -> Tuple[str, str]:
+    """(haystack, haystack_without_venue_names). Both lower-cased and accent-stripped.
+
+    The venue's own name/aliases are removed for music genres only: a place called
+    "Acoustic Café" is not evidence that it plays acoustic music.
+    """
+    hay = fx.strip_accents(text).lower()
+    music_hay = hay
+    for n in names:
+        n = fx.strip_accents(n or "").lower().strip()
+        if len(n) >= MIN_NAME_LEN:
+            music_hay = re.sub(re.escape(n), " ", music_hay)
+    return hay, music_hay
+
+
+def find_evidence(group: str, tag: str, hay: str, music_hay: str) -> Optional["re.Match[str]"]:
+    """The regex match that justifies `tag`, or None. Tags without a rule are always kept."""
+    pattern = EVIDENCE.get(group, {}).get(tag)
+    if pattern is None:
+        return re.search(r"", hay)  # empty match = "kept"
+    base = music_hay if group == "music_genres" else hay
+    if tag in GENERIC_CATEGORY:
+        base = re.sub(GENERIC_CATEGORY[tag], " ", base)
+    return re.search(pattern, base)
+
+
+def apply_aliases(tags: Dict[str, List[str]]) -> Dict[str, List[str]]:
+    """Merge tags that mean the same (e.g. co_dien -> co_kinh), keeping order, no duplicates."""
+    return {k: list(dict.fromkeys(TAG_ALIASES.get(v, v) for v in vals)) for k, vals in tags.items()}
+
+
+def validate_tags(
+    tags: Dict[str, List[str]], text: str, names: Optional[List[str]] = None
+) -> Tuple[Dict[str, List[str]], List[str]]:
+    """Merge aliases, then drop tags without evidence in `text`. Returns (tags, dropped)."""
+    hay, music_hay = _prepare(text, names or [])
+    out = apply_aliases(tags)
     dropped: List[str] = []
-    for group in ("music_genres", "features"):
-        plain, acc = EVIDENCE.get(group, {}), EVIDENCE_ACCENTED.get(group, {})
+    for group in EVIDENCE:
         kept = []
         for tag in out.get(group, []):
-            if tag in acc:
-                ok = re.search(acc[tag], accented)
-            else:
-                ok = tag in plain and re.search(plain[tag], folded)
-            if ok:
+            if find_evidence(group, tag, hay, music_hay):
                 kept.append(tag)
             else:
                 dropped.append(f"{group}:{tag}")
         out[group] = kept
     return out, dropped
+
+
+def explain(entity: Dict[str, Any], raw_tags: Optional[Dict[str, List[str]]]) -> None:
+    """Print, for each tag the LLM gave, the text that justifies it (or that nothing does)."""
+    names = [entity.get("name", "")] + list(entity.get("aliases") or [])
+    print(f"\n=== {entity.get('name')} ===")
+    if raw_tags is None:
+        print("  (no cached LLM answer for this entity)")
+        return
+    hay, music_hay = _prepare(entity_text(entity), names)
+    for group, tags in apply_aliases(raw_tags).items():
+        for tag in tags:
+            m = find_evidence(group, tag, hay, music_hay)
+            if not m:
+                print(f"  DROP {group}:{tag}  (no evidence)")
+            elif m.group(0) == "":
+                print(f"  KEEP {group}:{tag}  (no rule)")
+            else:
+                base = music_hay if group == "music_genres" else hay
+                s, e = m.start(), m.end()
+                print(f"  KEEP {group}:{tag}  ...{base[max(0, s - 30):e + 30]}...")
 
 
 def build_prompt(items: List[Tuple[int, str, str]]) -> str:
@@ -266,6 +330,10 @@ def main(argv: Optional[List[str]] = None) -> None:
                         help="requests are limited by GEMINI_RPM, so few workers are enough")
     parser.add_argument("--batch-size", type=int, default=5)
     parser.add_argument("--retag", action="store_true", help="ignore the cache, tag everything again")
+    parser.add_argument("--show-dropped", action="store_true",
+                        help="print which tags were removed for each entity")
+    parser.add_argument("--explain", metavar="NAME", default=None,
+                        help="show the evidence for each tag of entities whose name contains NAME, then exit")
     args = parser.parse_args(argv)
 
     input_path = Path(args.input) if args.input else next(
@@ -280,6 +348,13 @@ def main(argv: Optional[List[str]] = None) -> None:
 
     entities = json.loads(input_path.read_text(encoding="utf-8"))
     cache = {} if args.retag else load_cache(cache_path)
+
+    if args.explain:
+        needle = fx.strip_accents(args.explain).lower()
+        for e in entities:
+            if needle in fx.strip_accents(e.get("name", "")).lower():
+                explain(e, cache.get(entity_key(e)))
+        return
 
     todo: List[Tuple[int, str, str]] = []
     for i, e in enumerate(entities):
@@ -322,9 +397,12 @@ def main(argv: Optional[List[str]] = None) -> None:
             failed += 1 if len(entity_text(e)) >= MIN_TEXT_LEN else 0
             tags = EMPTY_TAGS
         else:
-            tags, dropped = validate_tags(tags, entity_text(e))  # cache keeps the raw LLM answer
+            names = [e.get("name", "")] + list(e.get("aliases") or [])
+            tags, dropped = validate_tags(tags, entity_text(e), names)  # cache keeps the raw LLM answer
             for d in dropped:
                 dropped_total[d] = dropped_total.get(d, 0) + 1
+            if args.show_dropped and dropped:
+                print(f"  {e.get('name')}: removed {dropped}")
         e["music_genres"] = list(tags["music_genres"])
         e["atmosphere_tags"] = list(tags["atmosphere_tags"])
         e["features"] = list(tags["features"])

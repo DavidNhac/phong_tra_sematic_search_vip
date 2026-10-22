@@ -199,10 +199,15 @@ class BaseCrawler:
     def extract_section_images(
         self, blocks: Iterable[Any], base_url: str, max_images: int = 3
     ) -> List[str]:
-        """Images found inside the given content blocks (already limited to one section)."""
+        """Images found inside the given content blocks (already limited to one section).
+
+        A block can itself be an <img> (e.g. mytour puts images directly next to the heading
+        and paragraphs); find_all() only looks at descendants, so the block is checked too.
+        """
         images: List[str] = []
         for block in blocks:
-            for img in block.find_all("img"):
+            candidates = ([block] if block.name == "img" else []) + block.find_all("img")
+            for img in candidates:
                 url = self.get_absolute_url(base_url, self._image_src(img))
                 if not url or url in images or not self._is_good_image(url, img):
                     continue

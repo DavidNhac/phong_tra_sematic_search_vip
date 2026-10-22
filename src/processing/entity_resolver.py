@@ -190,7 +190,9 @@ class EntityResolver:
             if len(a["_core"]) >= 3 and len(b["_core"]) >= 3:  # "g4u" vs "g4u ca nhac"
                 score = max(score, fuzz.token_set_ratio(a["_core"], b["_core"]))
             return score if score >= self.address_name_threshold else None
-        
+        # relation == "unknown": one side has no usable address, so only the names can decide
+        return sort_score if sort_score >= self.name_threshold else None
+
     def _compatible(self, group_a: List[int], group_b: List[int]) -> bool:
         """Two groups may merge only if no member of one conflicts with a member of the other.
         This stops an item without an address from chaining two different branches together."""
