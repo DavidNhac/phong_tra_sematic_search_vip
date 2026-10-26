@@ -1,22 +1,22 @@
-version: '3.8'
-
 services:
   qdrant:
     image: qdrant/qdrant:v1.12.0
     container_name: phong-tra-qdrant
     ports:
-      - "6333:6333"  # REST API
-      - "6334:6334"  # gRPC
+      - "6333:6333"
+      - "6334:6334"
     volumes:
       - qdrant_storage:/qdrant/storage
     environment:
-      - QDRANT__SERVICE__GRPC_PORT=6334
+      QDRANT__SERVICE__GRPC_PORT: "6334"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/"]
-      interval: 10s
+      test: ["CMD", "/bin/sh", "-c", "echo > /dev/tcp/127.0.0.1/6333"]
+      interval: 30s
       timeout: 5s
-      retries: 5
+      retries: 3
+      start_period: 10s
 
 volumes:
   qdrant_storage:
+    name: phong-tra-semantic-search_qdrant_storage

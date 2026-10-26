@@ -42,7 +42,7 @@ def create_collection(client: QdrantClient, recreate: bool = False) -> None:
         vectors_config={DENSE_VECTOR: VectorParams(size=EMBEDDING_DIM, distance=Distance.COSINE)},
         sparse_vectors_config={SPARSE_VECTOR: SparseVectorParams(modifier=Modifier.IDF)},
     )
-    logger.info(f"✅ Collection '{collection_name}' created")
+    logger.info(f"[OK] Collection '{collection_name}' created")
 
 
 def create_payload_indexes(client: QdrantClient) -> None:
@@ -62,7 +62,7 @@ def create_payload_indexes(client: QdrantClient) -> None:
             field_name=field,
             field_schema=PayloadSchemaType.INTEGER,
         )
-    logger.info("✅ Payload indexes created")
+    logger.info("[OK] Payload indexes created")
 
 
 def setup_collection(recreate: bool = False) -> None:

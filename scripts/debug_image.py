@@ -24,11 +24,11 @@ async def debug_images(url: str, target_name: str = "Acoustic"):
             text = h.get_text(strip=True)
             if target_name.lower() in text.lower():
                 target_heading = h
-                print(f"🎯 Found heading: '{text}'")
+                print(f"(ok found) Found heading: '{text}'")
                 break
         
         if not target_heading:
-            print(f"❌ Could not find heading containing '{target_name}'")
+            print(f"[X] Could not find heading containing '{target_name}'")
             return
         
         # In ra HTML của heading và 10 sibling tiếp theo
@@ -49,7 +49,7 @@ async def debug_images(url: str, target_name: str = "Acoustic"):
             # Tìm tất cả <img> trong sibling này
             imgs = current.find_all("img")
             if imgs:
-                print(f"  📸 Found {len(imgs)} image(s):")
+                print(f"  (ảnh) Found {len(imgs)} image(s):")
                 for img in imgs:
                     print(f"    - src: {img.get('src', 'N/A')}")
                     print(f"    - data-src: {img.get('data-src', 'N/A')}")
@@ -75,13 +75,13 @@ async def debug_images(url: str, target_name: str = "Acoustic"):
         all_imgs = section_soup.find_all("img")
         
         if all_imgs:
-            print(f"✅ Found {len(all_imgs)} image(s) in section:")
+            print(f"[OK] Found {len(all_imgs)} image(s) in section:")
             for i, img in enumerate(all_imgs):
                 src = img.get("data-src") or img.get("data-lazy-src") or img.get("src") or ""
                 print(f"  [{i+1}] src={src}")
                 print(f"      alt={img.get('alt', 'N/A')}")
         else:
-            print("❌ No images found in this section!")
+            print("[lỗi] No images found in this section!")
 
 
 if __name__ == "__main__":

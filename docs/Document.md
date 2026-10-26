@@ -101,3 +101,12 @@ Thông tin quán (tên, địa chỉ, quận, giá, giờ, ảnh, tag): giống 
 Nếu muốn đoạn hiển thị cố định cho mỗi quán thì dùng tea_rooms.description trong SQL, tách khỏi kết quả tìm kiếm (Qdrant chỉ dùng để xếp hạng).
 
 Một lưu ý theo handoff: đoạn mô tả là nội dung blog có bản quyền. Nếu công khai web thì nên chỉ hiện đoạn trích ngắn kèm link nguồn, hoặc viết lại.
+
+### ảnh xử lý
+
+Ảnh đang đi qua những đâu trong repo
+
+Cào ảnh: src/crawler/base_crawler.py có \_image_src, \_is_good_image và extract_section_images. Ảnh được lấy theo từng section dưới heading quán, mặc định tối đa 3 ảnh mỗi quán (tham số max_images trong blog_crawler.py).
+Gộp trùng: src/processing/entity_resolver.py lọc thêm ảnh rác bằng regex \_JUNK_IMAGE, rồi gộp ảnh của các nguồn lại và giữ tối đa 5 ảnh mỗi quán (image_url, image_urls).
+Nạp SQL Server: src/database/load_sql.py ghi vào bảng tea_room_images, và cột tea_rooms.image_url giữ ảnh chính. build_index.py đưa image_url vào payload Qdrant.
+Debug: scripts/debug_image.py in HTML quanh một heading để xem ảnh nằm ở đâu.

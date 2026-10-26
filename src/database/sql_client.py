@@ -33,19 +33,19 @@ class SQLClient:
         # Tạo session factory
         self.SessionLocal = sessionmaker(bind=self.engine)
         
-        logger.info(f"✅ SQL Client initialized: {self.database_url.split('@')[-1] if '@' in self.database_url else self.database_url}")
+        logger.info(f"[OK] SQL Client initialized: {self.database_url.split('@')[-1] if '@' in self.database_url else self.database_url}")
     
     def create_tables(self):
         """Tạo tất cả tables nếu chưa tồn tại."""
         logger.info("Creating tables if not exists...")
         Base.metadata.create_all(bind=self.engine)
-        logger.info("✅ Tables created/verified")
+        logger.info("[OK] Tables created/verified")
     
     def drop_tables(self):
         """Xóa tất cả tables (CẨN THẬN!)."""
         logger.warning("Dropping all tables...")
         Base.metadata.drop_all(bind=self.engine)
-        logger.info("✅ Tables dropped")
+        logger.info("[OK] Tables dropped")
     
     @contextmanager
     def get_session(self) -> Session:
@@ -72,7 +72,7 @@ class SQLClient:
         try:
             with self.get_session() as session:
                 result = session.execute(text("SELECT 1"))
-                logger.info("✅ SQL Server connection successful")
+                logger.info("[OK] SQL Server connection successful")
                 return True
         except Exception as e:
             logger.error(f" SQL Server connection failed: {e}")

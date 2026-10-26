@@ -47,11 +47,11 @@ def test_connection() -> bool:
     try:
         client = get_qdrant_client()
         collections = client.get_collections()
-        print(f"✅ Connected to Qdrant at {settings.qdrant_url}")
-        print(f"📦 Existing collections: {[c.name for c in collections.collections]}")
+        print(f"[OK] Connected to Qdrant at {settings.qdrant_url}")
+        print(f"[found] Existing collections: {[c.name for c in collections.collections]}")
         return True
     except Exception as e:
-        print(f"❌ Failed to connect to Qdrant: {e}")
+        print(f"[LỖI] Failed to connect to Qdrant: {e}")
         return False
 
 
