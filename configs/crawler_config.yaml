@@ -1,0 +1,73 @@
+global:
+  timeout: 30
+  concurrency: 3
+  retry_attempts: 2 # retry với backoff khi gặp 403/429/5xx hoặc lỗi mạng
+  delay_between_requests: 2.0
+  # User-Agent giống Chrome thật trên Windows để tránh bị chặn (403)
+  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  output_dir: "data/raw" # mỗi nguồn một file <name>.json, crawl lại sẽ ghi đè
+  html_dir: "data/raw_html" # bản HTML gốc để sửa parser mà không cần crawl lại
+  save_html: true
+
+# priority: nguồn có số cao hơn được ưu tiên khi gộp địa chỉ/giá/giờ giữa các nguồn
+# language: vi | en (bỏ trống = tự nhận diện từ nội dung)
+# options: (tuỳ chọn) chỉnh riêng cho từng nguồn, vd heading_tags: [h3], name_pattern, max_section_chars
+sources:
+  - name: "luhanhvietnam"
+    url: "https://luhanhvietnam.com.vn/du-lich/phong-tra-o-ha-noi.html"
+    parser: "generic"
+    language: "vi"
+    priority: 1
+
+  - name: "mytour_1"
+    url: "https://mytour.vn/vi/blog/bai-viet/10-dia-diem-phong-tra-am-nhac-tuyet-voi-o-ha-noi-de-ban-thu-gian-digifood.html"
+    parser: "mytour"
+    language: "vi"
+    priority: 2
+
+  - name: "mytour_2"
+    url: "https://mytour.vn/vi/blog/bai-viet/thu-gian-voi-am-nhac-tai-13-dia-chi-phong-tra-ha-noi-doc-dao-va-noi-tieng-nhat.html"
+    parser: "mytour"
+    language: "vi"
+    priority: 2
+
+  - name: "vinwonders"
+    url: "https://vinwonders.com/vi/wonderpedia/news/phong-tra-ha-noi/"
+    parser: "generic"
+    language: "vi"
+    priority: 2
+
+  # - name: "vinpearl"
+  #   url: "https://vinpearl.com/en/live-music-in-hanoi"
+  #   parser: "generic"
+  #   language: "en"
+  #   priority: 1
+
+  - name: "digiticket"
+    url: "https://digiticket.vn/blog/phong-tra-ha-noi"
+    parser: "digiticket"
+    language: "vi"
+    priority: 2
+
+  - name: "hanoireview"
+    url: "https://hanoireview.vn/topAZ/phong-tra-tai-ha-noi-noi-tieng"
+    parser: "generic"
+    language: "vi"
+    priority: 1
+
+  # - name: "wecheckin"
+  #   url: "https://wecheckin.vn/du-lich-trong-nuoc/ha-noi/phong-tra-o-ha-noi.html"
+  #   parser: "generic"
+  #   language: "vi"
+  #   priority: 1
+
+  # Tạm comment nguồn này vì link đã bị 404 (chết)
+  # - name: "vietnamairlines"
+  #   url: "https://vietnamairlines.com/ch/vi/plan-book/travel/travel-guide/phong-tra-ha-noi"
+  #   parser: "generic"
+
+  # - name: "tatinta"
+  #   url: "https://tatinta.com/en/diem-den/nhung-quan-cafe-acoustic-noi-tieng-nhat-tai-ha-noi/4256"
+  #   parser: "generic"
+  #   # không khai báo language: URL có /en/ nhưng slug tiếng Việt, để tự nhận diện
+  #   priority: 1
